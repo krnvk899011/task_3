@@ -1,10 +1,37 @@
-```php
 <?php
 // index.php
-session_start();
-$errors = $_SESSION['errors'] ?? [];
-$old = $_SESSION['old'] ?? [];
-unset($_SESSION['errors'], $_SESSION['old']);
+session_start(); // Добавляем старт сессии
+
+$errors = [];
+$old = [];
+
+// Показываем сгенерированные логин/пароль, если они есть
+$generatedLogin = $_SESSION['generated_login'] ?? null;
+$generatedPassword = $_SESSION['generated_password'] ?? null;
+
+// Очищаем после отображения
+if ($generatedLogin) {
+    unset($_SESSION['generated_login']);
+}
+if ($generatedPassword) {
+    unset($_SESSION['generated_password']);
+}
+
+// Читаем Cookies с ошибками (если есть)
+if (isset($_COOKIE['form_errors'])) {
+    $errors = json_decode($_COOKIE['form_errors'], true);
+    setcookie('form_errors', '', time() - 3600, '/');
+}
+
+// Читаем сохраненные данные из Cookies (если есть)
+if (isset($_COOKIE['form_data'])) {
+    $old = json_decode($_COOKIE['form_data'], true);
+}
+
+// Если есть временные данные из запроса (приоритет над Cookies)
+if (isset($_GET['old'])) {
+    $old = array_merge($old, json_decode(urldecode($_GET['old']), true) ?: []);
+}
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -13,102 +40,216 @@ unset($_SESSION['errors'], $_SESSION['old']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Регистрационная форма</title>
     <style>
+        /* Современный минималистичный дизайн с неоновыми акцентами */
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: linear-gradient(145deg, #0b1120 0%, #192132 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(125deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 30px 20px;
             display: flex;
             justify-content: center;
             align-items: center;
             position: relative;
-            overflow-x: hidden;
         }
 
+        /* Анимированный фон */
         body::before {
             content: '';
-            position: absolute;
+            position: fixed;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.15) 0%, transparent 40%),
-                        radial-gradient(circle at 90% 80%, rgba(147, 51, 234, 0.15) 0%, transparent 40%),
-                        radial-gradient(circle at 30% 70%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+            top: 0;
+            left: 0;
+            background: radial-gradient(circle at 30% 50%, rgba(56, 189, 248, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 50%, rgba(192, 132, 252, 0.1) 0%, transparent 50%);
             pointer-events: none;
+            z-index: 0;
         }
 
         .container {
             max-width: 900px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(10px);
-            border-radius: 32px;
-            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5),
-                        0 0 0 1px rgba(255, 255, 255, 0.2) inset,
-                        0 0 40px rgba(79, 70, 229, 0.2);
-            padding: 45px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 40px;
+            padding: 50px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.05);
             position: relative;
             z-index: 1;
-            animation: floatIn 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+            transition: transform 0.3s ease;
         }
 
-        @keyframes floatIn {
-            0% {
-                opacity: 0;
-                transform: translateY(40px) scale(0.98);
-            }
-            100% {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
+        .container:hover {
+            transform: translateY(-5px);
         }
 
         h1 {
-            text-align: center;
-            background: linear-gradient(135deg, #1e1b4b, #312e81);
+            font-size: 3rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff, #94a3b8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 35px;
-            font-weight: 800;
-            font-size: 2.5rem;
-            letter-spacing: -0.02em;
+            margin-bottom: 40px;
+            text-align: center;
             position: relative;
-            padding-bottom: 20px;
+            display: inline-block;
+            left: 50%;
+            transform: translateX(-50%);
         }
 
         h1::after {
             content: '';
             position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100px;
-            height: 4px;
-            background: linear-gradient(90deg, #4f46e5, #9333ea, #06b6d4);
-            border-radius: 4px;
-            animation: shimmer 2s infinite;
+            bottom: -10px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #38bdf8, #c084fc, transparent);
+            border-radius: 2px;
         }
 
-        @keyframes shimmer {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        /* Блок с учетными данными */
+        .credentials-box {
+            background: linear-gradient(145deg, rgba(56, 189, 248, 0.1), rgba(192, 132, 252, 0.1));
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 30px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
         }
 
+        .credentials-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #38bdf8, #c084fc, transparent);
+        }
+
+        .credentials-box h3 {
+            color: #fff;
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .credentials-box h3::before {
+            content: '✨';
+            font-size: 2rem;
+            filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));
+        }
+
+        .credential-item {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 20px;
+            padding: 20px 25px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .credential-item:hover {
+            border-color: #38bdf8;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
+            transform: translateX(10px);
+        }
+
+        .credential-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+            min-width: 70px;
+        }
+
+        .credential-item strong {
+            color: #fff;
+            font-size: 1.3rem;
+            font-family: 'Fira Code', monospace;
+            word-break: break-all;
+        }
+
+        .warning {
+            margin-top: 25px;
+            padding: 20px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 20px;
+            color: #f87171;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .warning::before {
+            content: '⚠️';
+            font-size: 1.5rem;
+        }
+
+        .login-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 25px;
+            background: linear-gradient(135deg, #38bdf8, #c084fc);
+            color: #fff;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 20px -10px rgba(56, 189, 248, 0.5);
+        }
+
+        .login-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 30px -10px rgba(56, 189, 248, 0.7);
+            gap: 15px;
+        }
+
+        .login-link::after {
+            content: '→';
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+
+        .login-link:hover::after {
+            transform: translateX(5px);
+        }
+
+        /* Сетка формы */
         .form-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 25px;
         }
 
         .form-group {
-            margin-bottom: 0;
-            position: relative;
+            margin-bottom: 5px;
         }
 
         .form-group.full-width {
@@ -117,199 +258,125 @@ unset($_SESSION['errors'], $_SESSION['old']);
 
         label {
             display: block;
-            margin-bottom: 8px;
-            color: #1e293b;
-            font-weight: 600;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
+            margin-bottom: 10px;
+            color: #e2e8f0;
+            font-weight: 500;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
         }
 
-        label[for="full_name"]::after,
-        label[for="phone"]::after,
-        label[for="email"]::after,
-        label[for="birth_date"]::after,
-        .form-group:has(.radio-group) label::after,
-        label[for="languages"]::after,
-        .checkbox-group label::after {
-            content: ' *';
-            color: #ef4444;
-            font-weight: 700;
-        }
-
-        input[type="text"],
-        input[type="tel"],
-        input[type="email"],
-        input[type="date"],
-        select,
-        textarea {
+        input, select, textarea {
             width: 100%;
-            padding: 14px 18px;
-            border: 2px solid #e2e8f0;
+            padding: 15px 20px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.2);
             border-radius: 20px;
             font-size: 1rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            background: #f8fafc;
-            font-family: inherit;
-            color: #0f172a;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        }
-
-        input:hover,
-        select:hover,
-        textarea:hover {
-            border-color: #94a3b8;
-            background: white;
-            transform: translateY(-1px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
+            color: #fff;
+            transition: all 0.3s ease;
             outline: none;
-            border-color: #4f46e5;
-            background: white;
-            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15), 0 5px 15px rgba(0,0,0,0.05);
-            transform: translateY(-2px);
         }
 
+        input:hover, select:hover, textarea:hover {
+            border-color: #38bdf8;
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: #c084fc;
+            box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.2);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #475569;
+        }
+
+        /* Radio buttons */
         .radio-group {
             display: flex;
             gap: 30px;
-            padding: 14px 20px;
-            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-            border-radius: 20px;
-            border: 2px solid #e2e8f0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            padding: 10px 0;
         }
 
         .radio-option {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            color: #e2e8f0;
             cursor: pointer;
-            font-weight: 500;
-            color: #334155;
-            transition: all 0.2s;
-            position: relative;
-            padding: 5px 10px;
-            border-radius: 12px;
-        }
-
-        .radio-option:hover {
-            color: #4f46e5;
-            background: rgba(79, 70, 229, 0.05);
         }
 
         .radio-option input[type="radio"] {
             width: 20px;
             height: 20px;
-            accent-color: #4f46e5;
-            cursor: pointer;
+            accent-color: #c084fc;
             margin: 0;
+            padding: 0;
         }
 
+        /* Checkbox */
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 16px 22px;
-            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-            border-radius: 20px;
-            border: 2px solid #a7f3d0;
-            transition: all 0.3s;
-            cursor: pointer;
-            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.1);
-        }
-
-        .checkbox-group:hover {
-            background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.2);
-            border-color: #34d399;
+            gap: 15px;
+            padding: 10px 0;
         }
 
         .checkbox-group input[type="checkbox"] {
             width: 22px;
             height: 22px;
-            cursor: pointer;
-            accent-color: #10b981;
+            accent-color: #38bdf8;
             margin: 0;
+            padding: 0;
         }
 
-        .checkbox-group label {
-            margin: 0;
-            color: #065f46;
-            font-weight: 700;
-            font-size: 1rem;
-            text-transform: none;
-            cursor: pointer;
-        }
-
+        /* Multiple select */
         select[multiple] {
             height: 200px;
-            background: #f8fafc;
             padding: 10px;
-            cursor: pointer;
         }
 
         select[multiple] option {
-            padding: 12px 16px;
-            margin: 4px 0;
+            padding: 12px 15px;
+            margin: 3px 0;
             border-radius: 12px;
-            background: white;
-            color: #1e293b;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            background: rgba(15, 23, 42, 0.8);
+            color: #e2e8f0;
+            transition: all 0.2s ease;
         }
 
         select[multiple] option:hover {
-            background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-            transform: translateX(5px);
-            border-color: #4f46e5;
+            background: rgba(56, 189, 248, 0.2);
         }
 
         select[multiple] option:checked {
-            background: linear-gradient(135deg, #4f46e5, #9333ea);
-            color: white;
-            font-weight: 600;
-            border: none;
-            box-shadow: 0 5px 15px rgba(79, 70, 229, 0.3);
+            background: linear-gradient(135deg, #38bdf8, #c084fc);
+            color: #fff;
         }
 
+        /* Textarea */
         textarea {
-            resize: vertical;
             min-height: 120px;
-            line-height: 1.6;
+            resize: vertical;
         }
 
+        /* Кнопка */
         .btn {
-            background: linear-gradient(135deg, #4f46e5, #9333ea, #06b6d4);
-            color: white;
-            border: none;
-            padding: 18px 30px;
-            font-size: 1.2rem;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             width: 100%;
+            padding: 18px;
+            margin-top: 30px;
+            background: linear-gradient(135deg, #38bdf8, #c084fc);
+            border: none;
+            border-radius: 30px;
+            color: #fff;
+            font-size: 1.2rem;
             font-weight: 700;
             letter-spacing: 1px;
-            margin-top: 35px;
+            cursor: pointer;
+            transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 15px 30px -5px rgba(79, 70, 229, 0.4);
-            background-size: 200% 200%;
-            animation: gradientShift 3s ease infinite;
-        }
-
-        @keyframes gradientShift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
         }
 
         .btn::before {
@@ -319,211 +386,123 @@ unset($_SESSION['errors'], $_SESSION['old']);
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            transition: left 0.6s;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
         }
 
         .btn:hover {
-            transform: translateY(-4px) scale(1.02);
-            box-shadow: 0 25px 40px -5px rgba(79, 70, 229, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 30px -10px rgba(56, 189, 248, 0.5);
         }
 
         .btn:hover::before {
             left: 100%;
         }
 
-        .btn:active {
-            transform: translateY(0) scale(1);
-            box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
+        /* Сообщения об ошибках */
+        .error-container {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 30px;
+            padding: 25px;
+            margin-bottom: 30px;
+            color: #f87171;
+        }
+
+        .error-container strong {
+            display: block;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .error-item {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .error-item:last-child {
+            border-bottom: none;
+        }
+
+        .error-title {
+            font-weight: 600;
+            color: #fecaca;
+            margin-bottom: 5px;
         }
 
         .error-message {
-            background: linear-gradient(135deg, #fef2f2, #fee2e2);
-            color: #991b1b;
-            padding: 18px 22px;
-            border-radius: 20px;
-            margin-bottom: 30px;
-            border-left: 6px solid #dc2626;
-            font-size: 0.95rem;
-            box-shadow: 0 10px 25px -10px #dc2626;
-            animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-        }
-
-        @keyframes shake {
-            10%, 90% { transform: translateX(-2px); }
-            20%, 80% { transform: translateX(4px); }
-            30%, 50%, 70% { transform: translateX(-6px); }
-            40%, 60% { transform: translateX(6px); }
-        }
-
-        .error-message ul {
-            margin-left: 25px;
-            margin-top: 12px;
-        }
-
-        .error-message li {
-            margin: 6px 0;
-            font-weight: 500;
-        }
-
-        .success-message {
-            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-            color: #065f46;
-            padding: 18px 22px;
-            border-radius: 20px;
-            margin-bottom: 30px;
-            border-left: 6px solid #10b981;
-            text-align: center;
-            font-weight: 700;
-            font-size: 1.1rem;
-            box-shadow: 0 10px 25px -10px #10b981;
-            animation: slideDown 0.5s ease, glow 2s infinite;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes glow {
-            0%, 100% { box-shadow: 0 10px 25px -10px #10b981; }
-            50% { box-shadow: 0 15px 35px -5px #10b981; }
+            color: #f87171;
+            font-size: 0.9rem;
         }
 
         .field-error {
-            border-color: #dc2626 !important;
-            background: #fef2f2 !important;
-            animation: pulse 0.5s ease;
+            border-color: #ef4444 !important;
+            background: rgba(239, 68, 68, 0.05) !important;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.02); }
+        /* Сообщение об успехе */
+        .success-message {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 30px;
+            padding: 25px;
+            margin-bottom: 30px;
+            color: #86efac;
+            text-align: center;
+            font-weight: 500;
+            font-size: 1.1rem;
         }
 
-        .field-error:focus {
-            box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.15) !important;
-        }
-
-        small {
-            color: #64748b;
+        /* Подсказки */
+        .hint {
             display: block;
             margin-top: 8px;
+            color: #64748b;
             font-size: 0.85rem;
-            font-weight: 500;
-            transition: color 0.2s;
+            padding-left: 15px;
         }
 
-        select:focus + small {
-            color: #4f46e5;
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 12px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 20px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #94a3b8, #64748b);
-            border-radius: 20px;
-            border: 3px solid #f1f5f9;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #4f46e5, #9333ea);
-        }
-
-        /* Loading animation for form */
-        .container {
-            position: relative;
-        }
-
-        .container::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border-radius: 32px;
-            pointer-events: none;
-            background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.2) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .container:active::after {
-            opacity: 1;
-        }
-
+        /* Адаптивность */
         @media (max-width: 768px) {
             .container {
-                padding: 25px;
-                border-radius: 24px;
+                padding: 30px 20px;
             }
-            
+
             h1 {
                 font-size: 2rem;
             }
-            
+
             .form-grid {
                 grid-template-columns: 1fr;
-                gap: 20px;
             }
-            
+
             .form-group.full-width {
                 grid-column: span 1;
             }
-            
-            .radio-group {
+
+            .credentials-box h3 {
+                font-size: 1.4rem;
+            }
+
+            .credential-item {
                 flex-direction: column;
-                gap: 15px;
-            }
-            
-            .btn {
-                padding: 16px 25px;
-                font-size: 1.1rem;
-            }
-            
-            select[multiple] {
-                height: 160px;
-            }
-            
-            .checkbox-group {
-                padding: 14px 18px;
+                align-items: flex-start;
             }
         }
 
-        /* Print styles */
-        @media print {
-            body {
-                background: white;
-                padding: 0;
+        /* Анимации */
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
             }
-            
-            .container {
-                box-shadow: none;
-                padding: 20px;
-            }
-            
-            .btn {
-                display: none;
+            50% {
+                box-shadow: 0 0 40px rgba(192, 132, 252, 0.5);
             }
         }
 
-        /* Add Inter font */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        .container {
+            animation: glow 8s infinite;
+        }
     </style>
 </head>
 <body>
@@ -531,13 +510,14 @@ unset($_SESSION['errors'], $_SESSION['old']);
         <h1>Регистрационная форма</h1>
         
         <?php if (!empty($errors)): ?>
-            <div class="error-message">
+            <div class="error-container">
                 <strong>Пожалуйста, исправьте следующие ошибки:</strong>
-                <ul>
-                    <?php foreach ($errors as $error): ?>
-                        <li><?= htmlspecialchars($error) ?></li>
-                    <?php endforeach; ?>
-                </ul>
+                <?php foreach ($errors as $field => $error): ?>
+                    <div class="error-item">
+                        <div class="error-title">Поле "<?= htmlspecialchars($field) ?>":</div>
+                        <div class="error-message"><?= htmlspecialchars($error) ?></div>
+                    </div>
+                <?php endforeach; ?>
             </div>
         <?php endif; ?>
         
@@ -545,11 +525,34 @@ unset($_SESSION['errors'], $_SESSION['old']);
             <div class="success-message">
                 ✓ Данные успешно сохранены! ID записи: <?= htmlspecialchars($_GET['id'] ?? '') ?>
             </div>
+            
+            <?php if ($generatedLogin && $generatedPassword): ?>
+                <div class="credentials-box">
+                    <h3>Ваши учетные данные для входа</h3>
+                    <p style="color: #94a3b8; margin-bottom: 20px;">Сохраните их! Они понадобятся для редактирования данных.</p>
+                    
+                    <div class="credential-item">
+                        <span class="credential-label">Логин:</span>
+                        <strong><?= htmlspecialchars($generatedLogin) ?></strong>
+                    </div>
+                    
+                    <div class="credential-item">
+                        <span class="credential-label">Пароль:</span>
+                        <strong><?= htmlspecialchars($generatedPassword) ?></strong>
+                    </div>
+                    
+                    <div class="warning">
+                        Пароль хранится в базе в зашифрованном виде. Если потеряете, восстановить будет невозможно!
+                    </div>
+                    
+                    <a href="login.php" class="login-link">Перейти к входу для редактирования</a>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
         
         <form action="save.php" method="POST">
             <div class="form-grid">
-                <div class="form-group">
+                <div class="form-group <?= isset($errors['full_name']) ? 'has-error' : '' ?>">
                     <label for="full_name">ФИО *</label>
                     <input type="text" 
                            id="full_name" 
@@ -558,9 +561,13 @@ unset($_SESSION['errors'], $_SESSION['old']);
                            placeholder="Иванов Иван Иванович"
                            class="<?= isset($errors['full_name']) ? 'field-error' : '' ?>"
                            required>
+                    <?php if (isset($errors['full_name'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['full_name']) ?></div>
+                    <?php endif; ?>
+                    <span class="hint">Допустимы только буквы, пробелы и дефисы</span>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group <?= isset($errors['phone']) ? 'has-error' : '' ?>">
                     <label for="phone">Телефон *</label>
                     <input type="tel" 
                            id="phone" 
@@ -569,9 +576,13 @@ unset($_SESSION['errors'], $_SESSION['old']);
                            placeholder="+7 (999) 123-45-67"
                            class="<?= isset($errors['phone']) ? 'field-error' : '' ?>"
                            required>
+                    <?php if (isset($errors['phone'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['phone']) ?></div>
+                    <?php endif; ?>
+                    <span class="hint">Допустимы цифры, пробелы, +, -, (, )</span>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group <?= isset($errors['email']) ? 'has-error' : '' ?>">
                     <label for="email">E-mail *</label>
                     <input type="email" 
                            id="email" 
@@ -580,9 +591,13 @@ unset($_SESSION['errors'], $_SESSION['old']);
                            placeholder="example@mail.com"
                            class="<?= isset($errors['email']) ? 'field-error' : '' ?>"
                            required>
+                    <?php if (isset($errors['email'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['email']) ?></div>
+                    <?php endif; ?>
+                    <span class="hint">Формат: user@domain.com</span>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group <?= isset($errors['birth_date']) ? 'has-error' : '' ?>">
                     <label for="birth_date">Дата рождения *</label>
                     <input type="date" 
                            id="birth_date" 
@@ -590,9 +605,13 @@ unset($_SESSION['errors'], $_SESSION['old']);
                            value="<?= htmlspecialchars($old['birth_date'] ?? '') ?>"
                            class="<?= isset($errors['birth_date']) ? 'field-error' : '' ?>"
                            required>
+                    <?php if (isset($errors['birth_date'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['birth_date']) ?></div>
+                    <?php endif; ?>
+                    <span class="hint">Формат: ГГГГ-ММ-ДД</span>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group <?= isset($errors['gender']) ? 'has-error' : '' ?>">
                     <label>Пол *</label>
                     <div class="radio-group">
                         <label class="radio-option">
@@ -610,10 +629,13 @@ unset($_SESSION['errors'], $_SESSION['old']);
                                    required> Женский
                         </label>
                     </div>
+                    <?php if (isset($errors['gender'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['gender']) ?></div>
+                    <?php endif; ?>
                 </div>
                 
-                <div class="form-group">
-                    <label for="languages">Любимый язык программирования * (множественный выбор)</label>
+                <div class="form-group <?= isset($errors['languages']) ? 'has-error' : '' ?>">
+                    <label for="languages">Любимый язык программирования *</label>
                     <select name="languages[]" 
                             id="languages" 
                             multiple 
@@ -634,19 +656,26 @@ unset($_SESSION['errors'], $_SESSION['old']);
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <small style="color: #777; display: block; margin-top: 5px;">
+                    <?php if (isset($errors['languages'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['languages']) ?></div>
+                    <?php endif; ?>
+                    <small class="hint">
                         Удерживайте Ctrl (Cmd) для выбора нескольких
                     </small>
                 </div>
                 
-                <div class="form-group full-width">
+                <div class="form-group full-width <?= isset($errors['biography']) ? 'has-error' : '' ?>">
                     <label for="biography">Биография</label>
                     <textarea id="biography" 
                               name="biography" 
-                              placeholder="Расскажите о себе..."><?= htmlspecialchars($old['biography'] ?? '') ?></textarea>
+                              placeholder="Расскажите о себе..."
+                              class="<?= isset($errors['biography']) ? 'field-error' : '' ?>"><?= htmlspecialchars($old['biography'] ?? '') ?></textarea>
+                    <?php if (isset($errors['biography'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['biography']) ?></div>
+                    <?php endif; ?>
                 </div>
                 
-                <div class="form-group full-width">
+                <div class="form-group full-width <?= isset($errors['contract_accepted']) ? 'has-error' : '' ?>">
                     <div class="checkbox-group">
                         <input type="checkbox" 
                                name="contract_accepted" 
@@ -656,6 +685,9 @@ unset($_SESSION['errors'], $_SESSION['old']);
                                required>
                         <label for="contract">Я ознакомлен(а) с контрактом *</label>
                     </div>
+                    <?php if (isset($errors['contract_accepted'])): ?>
+                        <div class="error-message"><?= htmlspecialchars($errors['contract_accepted']) ?></div>
+                    <?php endif; ?>
                 </div>
             </div>
             
@@ -664,4 +696,3 @@ unset($_SESSION['errors'], $_SESSION['old']);
     </div>
 </body>
 </html>
-```
